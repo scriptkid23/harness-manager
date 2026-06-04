@@ -1,0 +1,39 @@
+@import "tailwindcss";
+
+/* Botanical / Organic Serif — design tokens via Tailwind v4 @theme. */
+@theme {
+  /* Earthbound palette — every color derives from nature, no artificial brights */
+  --color-bg: #f9f8f4;          /* warm alabaster / rice paper */
+  --color-forest: #2d3a31;      /* deep forest green — primary text */
+  --color-sage: #8c9a84;        /* sage accent */
+  --color-clay: #dccfc2;        /* soft clay / mushroom */
+  --color-clay-soft: #f2f0eb;   /* pale clay surface */
+  --color-stone: #e6e2da;       /* delicate border */
+  --color-terracotta: #c27b66;  /* interactive pop / hover */
+  --color-card: #ffffff;
+
+  /* Typography — Playfair for headings, Source Sans for body (loaded via next/font) */
+  --font-display: var(--font-playfair), Georgia, serif;
+  --font-body: var(--font-source-sans), system-ui, sans-serif;
+
+  /* Soft, diffused, forest-tinted elevation — no harsh dark drops */
+  --shadow-soft: 0 4px 6px -1px rgb(45 58 49 / 0.05);
+  --shadow-medium: 0 10px 15px -3px rgb(45 58 49 / 0.05);
+  --shadow-large: 0 20px 40px -10px rgb(45 58 49 / 0.05);
+  --shadow-bloom: 0 25px 50px -12px rgb(45 58 49 / 0.15);
+}
+
+@layer base {
+  html {
+    background-color: var(--color-bg);
+    color: var(--color-forest);
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+  }
+  body { margin: 0; }
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+}
