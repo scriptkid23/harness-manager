@@ -4,6 +4,11 @@
   "version": "0.0.0",
   "type": "module",
   "packageManager": "pnpm@9.15.4",
+  "pnpm": {
+    "overrides": {
+      "better-sqlite3": "11.10.0"
+    }
+  },
   "scripts": {
     "test": "vitest run",
     "build": "nx run-many -t build",

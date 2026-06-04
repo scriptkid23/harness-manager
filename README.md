@@ -118,7 +118,9 @@ pnpm --filter @harness/web dev
 pnpm exec tsx packages/mcp/src/index.ts
 ```
 
-**Ví dụ cấu hình Cursor** (`.cursor/mcp.json` hoặc Settings → MCP):
+**Ví dụ cấu hình Cursor** — copy `.cursor/mcp.json` trong repo, hoặc thêm vào Settings → MCP.
+
+macOS / Linux (`pnpm` trên PATH):
 
 ```json
 {
@@ -126,16 +128,32 @@ pnpm exec tsx packages/mcp/src/index.ts
     "harness": {
       "command": "pnpm",
       "args": ["exec", "tsx", "packages/mcp/src/index.ts"],
-      "cwd": "D:/1hoodlabs/harness-manager",
-      "env": {
-        "HARNESS_DB_URL": "file:./prisma/dev.db"
-      }
+      "cwd": "/absolute/path/to/harness-manager",
+      "env": { "HARNESS_DB_URL": "file:./prisma/dev.db" }
     }
   }
 }
 ```
 
-Đổi `cwd` thành đường dẫn tuyệt đối tới repo của bạn.
+Windows — Cursor spawn **không qua shell**, nên `"command": "pnpm"` thường gây `Connection closed`. Dùng `node.exe` + `tsx` (cùng Node với API, ví dụ 20.x):
+
+```json
+{
+  "mcpServers": {
+    "harness": {
+      "command": "C:/Program Files/nodejs/node.exe",
+      "args": [
+        "C:/absolute/path/to/harness-manager/node_modules/tsx/dist/cli.mjs",
+        "packages/mcp/src/index.ts"
+      ],
+      "cwd": "C:/absolute/path/to/harness-manager",
+      "env": { "HARNESS_DB_URL": "file:./prisma/dev.db" }
+    }
+  }
+}
+```
+
+Đổi mọi đường dẫn `C:/...` cho khớp máy bạn. Sau khi sửa config: **tắt/bật lại** server `harness` trong MCP settings.
 
 ---
 
@@ -196,7 +214,8 @@ Vẫn cần API chạy song song.
 | --------------------------- | ---------------------------------------------------------- |
 | Dashboard trống / lỗi fetch | Kiểm tra API đang chạy ở `4000`, `HARNESS_API_BASE` khớp   |
 | `prisma db push` lỗi        | Đặt `HARNESS_DB_URL`, chạy từ root repo                    |
-| MCP không kết nối           | `cwd` trong config trỏ đúng root; dùng đường dẫn tuyệt đối |
+| MCP `Connection closed`     | Windows: dùng `node.exe` + `tsx` (xem mục MCP), không dùng `pnpm`; `cwd` tuyệt đối; cùng Node khi `pnpm rebuild better-sqlite3` |
+| MCP không kết nối           | `cwd` trỏ đúng root repo; xem log MCP trong Cursor Output |
 | Repo không hiện             | POST `/repos` với `path` **tồn tại trên đĩa**              |
 
 
