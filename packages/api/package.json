@@ -1,0 +1,10 @@
+{
+  "name": "@harness/api",
+  "version": "0.0.0",
+  "type": "module",
+  "dependencies": {
+    "@harness/core": "workspace:*",
+    "fastify": "^5.2.0",
+    "@fastify/cors": "^10.0.0"
+  }
+}
