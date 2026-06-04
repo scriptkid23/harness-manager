@@ -1,0 +1,80 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../packages/core/src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Repo {
+  id                String     @id @default(cuid())
+  name              String
+  path              String     @unique
+  langfuseProjectId String?
+  features          Feature[]
+  agents            Agent[]
+  decisions         Decision[]
+  progress          Progress?
+  sessions          Session[]
+  indexedAt         DateTime?
+}
+
+model Feature {
+  id           String  @id @default(cuid())
+  repoId       String
+  repo         Repo    @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  featureId    String
+  behavior     String
+  verification String
+  state        String
+  evidence     String?
+  @@unique([repoId, featureId])
+}
+
+model Agent {
+  id           String @id @default(cuid())
+  repoId       String
+  repo         Repo   @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  agentId      String
+  role         String
+  model        String?
+  tools        String?  // JSON-encoded string[]
+  instructions String
+  @@unique([repoId, agentId])
+}
+
+model Decision {
+  id         String @id @default(cuid())
+  repoId     String
+  repo       Repo   @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  decisionId String
+  date       String
+  title      String
+  rationale  String
+  rejected   String?
+  @@unique([repoId, decisionId])
+}
+
+model Progress {
+  id            String  @id @default(cuid())
+  repoId        String  @unique
+  repo          Repo    @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  currentCommit String?
+  testStatus    String?
+  updatedAt     String
+  completed     String  // JSON-encoded string[]
+  inProgress    String
+  blocked       String
+  nextSteps     String
+}
+
+model Session {
+  id              String   @id @default(cuid())
+  repoId          String
+  repo            Repo     @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  langfuseTraceId String?
+  startedAt       DateTime
+  endedAt         DateTime?
+  summary         String?
+}

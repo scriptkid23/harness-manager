@@ -1,0 +1,11 @@
+node_modules/
+package-lock.json
+dist/
+.nx/
+*.tsbuildinfo
+.env
+*.db
+*.db-journal
+prisma/dev.db
+packages/core/src/generated/
+.next/

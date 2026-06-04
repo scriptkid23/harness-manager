@@ -1,0 +1,23 @@
+{
+  "name": "harness-manager",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "packageManager": "pnpm@9.15.4",
+  "scripts": {
+    "test": "vitest run",
+    "build": "nx run-many -t build",
+    "postinstall": "prisma generate",
+    "prisma:generate": "prisma generate",
+    "prisma:push": "prisma db push"
+  },
+  "devDependencies": {
+    "nx": "^20.3.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0",
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "prisma": "7.8.0",
+    "dotenv": "^16.4.7"
+  }
+}
