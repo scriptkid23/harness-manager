@@ -3,12 +3,14 @@
 Bảng điều khiển local-first cho **Harness Engineering** trên nhiều repository.  
 Dữ liệu gốc nằm trong thư mục `.harness/` của từng repo; SQLite chỉ là **index có thể build lại**.
 
-| Gói | Vai trò |
-|-----|---------|
+
+| Gói             | Vai trò                                                                     |
+| --------------- | --------------------------------------------------------------------------- |
 | `packages/core` | Schema, codec, validators, ghi file `.harness/`, index DB, `HarnessService` |
-| `packages/mcp` | MCP server (stdio) — agent đọc/ghi harness qua Cursor/Claude |
-| `packages/api` | REST API (Fastify) — phục vụ dashboard |
-| `packages/web` | Dashboard Next.js (chỉ đọc) — xem repo, features, decisions, sessions |
+| `packages/mcp`  | MCP server (stdio) — agent đọc/ghi harness qua Cursor/Claude                |
+| `packages/api`  | REST API (Fastify) — phục vụ dashboard                                      |
+| `packages/web`  | Dashboard Next.js (chỉ đọc) — xem repo, features, decisions, sessions       |
+
 
 **Luồng dùng thường gặp:** đăng ký repo qua API hoặc MCP → agent chỉnh `.harness/` qua MCP → dashboard đọc qua API.
 
@@ -45,12 +47,14 @@ cp .env.example .env
 
 Chỉnh `.env` nếu cần:
 
-| Biến | Mặc định | Ý nghĩa |
-|------|----------|---------|
-| `HARNESS_DB_URL` | `file:./prisma/dev.db` | SQLite index (cache) |
-| `LANGFUSE_HOST` | `https://cloud.langfuse.com` | Host Langfuse (tùy chọn) |
-| `LANGFUSE_PUBLIC_KEY` | (trống) | Bật tracing session qua MCP |
-| `LANGFUSE_SECRET_KEY` | (trống) | Cặp với public key |
+
+| Biến                  | Mặc định                     | Ý nghĩa                     |
+| --------------------- | ---------------------------- | --------------------------- |
+| `HARNESS_DB_URL`      | `file:./prisma/dev.db`       | SQLite index (cache)        |
+| `LANGFUSE_HOST`       | `https://cloud.langfuse.com` | Host Langfuse (tùy chọn)    |
+| `LANGFUSE_PUBLIC_KEY` | (trống)                      | Bật tracing session qua MCP |
+| `LANGFUSE_SECRET_KEY` | (trống)                      | Cặp với public key          |
+
 
 Không có key Langfuse → tracing **tắt im lặng**, mọi thứ khác vẫn chạy.
 
@@ -98,7 +102,7 @@ Thấy dòng: `harness-api listening on http://127.0.0.1:4000`
 pnpm --filter @harness/web dev
 ```
 
-Mở trình duyệt: **http://localhost:3000**
+Mở trình duyệt: **[http://localhost:3000](http://localhost:3000)**
 
 Dashboard gọi API tại `http://127.0.0.1:4000`. Đổi URL API:
 
@@ -151,7 +155,7 @@ curl -X POST http://127.0.0.1:4000/repos `
 
 **Qua MCP:** dùng tool `harness_init` với `repoPath` trỏ tới thư mục git đã tồn tại.
 
-Sau đó refresh **http://localhost:3000** — card repo xuất hiện; bấm vào để xem feature garden, decisions, sessions.
+Sau đó refresh **[http://localhost:3000](http://localhost:3000)** — card repo xuất hiện; bấm vào để xem feature garden, decisions, sessions.
 
 **Đồng bộ lại index từ file** (sau khi agent sửa `.harness/`):
 
@@ -187,12 +191,14 @@ Vẫn cần API chạy song song.
 
 ## Xử lý lỗi thường gặp
 
-| Triệu chứng | Cách xử lý |
-|-------------|------------|
-| Dashboard trống / lỗi fetch | Kiểm tra API đang chạy ở `4000`, `HARNESS_API_BASE` khớp |
-| `prisma db push` lỗi | Đặt `HARNESS_DB_URL`, chạy từ root repo |
-| MCP không kết nối | `cwd` trong config trỏ đúng root; dùng đường dẫn tuyệt đối |
-| Repo không hiện | POST `/repos` với `path` **tồn tại trên đĩa** |
+
+| Triệu chứng                 | Cách xử lý                                                 |
+| --------------------------- | ---------------------------------------------------------- |
+| Dashboard trống / lỗi fetch | Kiểm tra API đang chạy ở `4000`, `HARNESS_API_BASE` khớp   |
+| `prisma db push` lỗi        | Đặt `HARNESS_DB_URL`, chạy từ root repo                    |
+| MCP không kết nối           | `cwd` trong config trỏ đúng root; dùng đường dẫn tuyệt đối |
+| Repo không hiện             | POST `/repos` với `path` **tồn tại trên đĩa**              |
+
 
 ---
 
@@ -216,3 +222,4 @@ pnpm exec prisma db push
 pnpm exec tsx packages/api/src/index.ts
 pnpm --filter @harness/web dev
 ```
+
