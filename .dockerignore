@@ -1,0 +1,16 @@
+# Host build artifacts / caches — rebuilt inside the image (and host node_modules
+# would carry the wrong native ABI for better-sqlite3).
+node_modules
+**/node_modules
+**/dist
+packages/web/.next
+.nx
+.git
+terminals
+
+# Never bake a local SQLite index into the image; it lives on a volume.
+prisma/dev.db
+prisma/*.db
+
+# Local secrets — provided at runtime via compose env / volumes.
+.env

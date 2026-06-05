@@ -161,9 +161,73 @@ services:
     volumes:
       - langfuse_redis_data:/data
 
+  # ---------------------------------------------------------------------------
+  # harness-manager app: shared image, one central SQLite index on a volume.
+  # ---------------------------------------------------------------------------
+
+  # One-shot: create / sync the SQLite schema before api & mcp start.
+  harness-migrate:
+    build: .
+    image: harness-manager:local
+    command: ["pnpm", "exec", "prisma", "db", "push"]
+    environment:
+      HARNESS_DB_URL: file:/data/dev.db
+    volumes:
+      - harness_db:/data
+
+  harness-api:
+    image: harness-manager:local
+    restart: unless-stopped
+    depends_on:
+      harness-migrate: { condition: service_completed_successfully }
+    command: ["pnpm", "exec", "tsx", "packages/api/src/index.ts"]
+    environment:
+      HOST: 0.0.0.0 # reachable by web/mcp on the compose network
+      PORT: "4000"
+      HARNESS_DB_URL: file:/data/dev.db
+    ports:
+      - "4000:4000"
+    volumes:
+      - harness_db:/data
+
+  harness-web:
+    image: harness-manager:local
+    restart: unless-stopped
+    depends_on:
+      - harness-api
+    command: ["pnpm", "--filter", "@harness/web", "start"]
+    environment:
+      HARNESS_API_BASE: http://harness-api:4000 # server-side fetch over the network
+    ports:
+      - "3000:3000"
+
+  # MCP exposed over Streamable HTTP. Agents connect to http://localhost:8765/mcp.
+  # Repos to manage are bind-mounted under /projects; pass repoPath as /projects/<repo>.
+  harness-mcp:
+    image: harness-manager:local
+    restart: unless-stopped
+    depends_on:
+      harness-migrate: { condition: service_completed_successfully }
+    command: ["node", "packages/mcp/dist/harness-http.mjs"]
+    environment:
+      HOST: 0.0.0.0
+      PORT: "8765"
+      HARNESS_DB_URL: file:/data/dev.db
+      # Langfuse: keys interpolated from .env; host points at the in-cluster service.
+      LANGFUSE_HOST: http://langfuse-web:3000
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+    ports:
+      - "8765:8765"
+    volumes:
+      - harness_db:/data
+      # Host folder that contains the repos you want to manage (override in .env).
+      - ${HARNESS_PROJECTS_DIR:-./projects}:/projects
+
 volumes:
   langfuse_postgres_data:
   langfuse_clickhouse_data:
   langfuse_clickhouse_logs:
   langfuse_minio_data:
   langfuse_redis_data:
+  harness_db:

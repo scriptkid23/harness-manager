@@ -114,28 +114,21 @@ pnpm --filter @harness/web dev
 
 ### MCP server (stdio) — cho Cursor / Claude
 
+MCP server chạy từ **một file bundle đã build** (`packages/mcp/dist/harness-mcp.mjs`), không cần `tsx` nữa.
+Build chạy tự động trong `postinstall`; build lại thủ công khi sửa code MCP:
+
 ```bash
-pnpm exec tsx packages/mcp/src/index.ts
+pnpm --filter @harness/mcp build
 ```
 
-**Ví dụ cấu hình Cursor** — copy `.cursor/mcp.json` trong repo, hoặc thêm vào Settings → MCP.
+Chạy trực tiếp (debug):
 
-macOS / Linux (`pnpm` trên PATH):
-
-```json
-{
-  "mcpServers": {
-    "harness": {
-      "command": "pnpm",
-      "args": ["exec", "tsx", "packages/mcp/src/index.ts"],
-      "cwd": "/absolute/path/to/harness-manager",
-      "env": { "HARNESS_DB_URL": "file:./prisma/dev.db" }
-    }
-  }
-}
+```bash
+node packages/mcp/dist/harness-mcp.mjs --path .
 ```
 
-Windows — Cursor spawn **không qua shell**, nên `"command": "pnpm"` thường gây `Connection closed`. Dùng `node.exe` + `tsx` (cùng Node với API, ví dụ 20.x):
+**Cấu hình Cursor** — repo đã có sẵn `.cursor/mcp.json` rất gọn (không `env`, không `cwd`):
+server tự suy DB ra `file:<path>/prisma/dev.db` (tuyệt đối) và tự nạp `<path>/.env` để lấy key Langfuse.
 
 ```json
 {
@@ -143,17 +136,73 @@ Windows — Cursor spawn **không qua shell**, nên `"command": "pnpm"` thườn
     "harness": {
       "command": "C:/Program Files/nodejs/node.exe",
       "args": [
-        "C:/absolute/path/to/harness-manager/node_modules/tsx/dist/cli.mjs",
-        "packages/mcp/src/index.ts"
-      ],
-      "cwd": "C:/absolute/path/to/harness-manager",
-      "env": { "HARNESS_DB_URL": "file:./prisma/dev.db" }
+        "${workspaceFolder}/packages/mcp/dist/harness-mcp.mjs",
+        "--path",
+        "${workspaceFolder}"
+      ]
     }
   }
 }
 ```
 
-Đổi mọi đường dẫn `C:/...` cho khớp máy bạn. Sau khi sửa config: **tắt/bật lại** server `harness` trong MCP settings.
+`${workspaceFolder}` được Cursor thay bằng đường dẫn repo, nên config dùng được trên mọi máy mà không sửa path.
+
+**Vì sao vẫn là `node.exe` chứ không phải lệnh trần `harness-mcp`?** Trên Windows, Cursor spawn MCP **không qua shell**, nên các shim `.cmd`/`.ps1` (thứ duy nhất `pnpm/npm link` tạo ra cho tool Node) gây `Connection closed`. Lệnh trần chỉ chạy ổn nếu là **native `.exe`**. Ngoài ra đường dẫn `node.exe` còn ghim đúng Node 20 — cùng Node đã build `better-sqlite3` (Node 22 sẽ lỗi `NODE_MODULE_VERSION`).
+
+Mọi secret (key Langfuse) để trong `.env` ở root repo, **không** đặt trong `mcp.json`. Sau khi sửa config: **tắt/bật lại** server `harness` trong MCP settings.
+
+---
+
+## Chạy bằng Docker (cả cụm)
+
+Thay vì chạy tay từng tiến trình, có thể dựng cả cụm bằng compose. Image chung cho 3 service (api/web/mcp), một index SQLite trung tâm nằm trên volume `harness_db`.
+
+```bash
+# Build + chạy app harness (api 4000, web 3000, mcp 8765)
+docker compose up -d harness-api harness-web harness-mcp
+
+# Mở dashboard
+#   http://localhost:3000
+# MCP Streamable HTTP:
+#   http://localhost:8765/mcp   (health: http://localhost:8765/health)
+```
+
+`harness-migrate` (chạy một lần, tự `prisma db push`) khởi tạo schema trước khi `api`/`mcp` lên.
+
+**Repo cần quản lý phải được mount vào container.** Đặt trong `.env` ở root:
+
+```bash
+HARNESS_PROJECTS_DIR=C:/Users/hoan.do/Documents/project   # thư mục CHA chứa các repo
+```
+
+Thư mục này được mount thành `/projects` trong container. **Quan trọng:** khi gọi tool MCP, truyền `repoPath` theo **đường dẫn trong container**, ví dụ `/projects/lua-dag-consensus` (không phải path host) — vì MCP chạy cô lập filesystem.
+
+**Cấu hình Cursor cho MCP qua HTTP** (đúng kiểu "chỉ connect tới 1 port"):
+
+```json
+{
+  "mcpServers": {
+    "harness": { "url": "http://127.0.0.1:8765/mcp" }
+  }
+}
+```
+
+Nếu bản Cursor chưa hỗ trợ trường `url`, dùng proxy `mcp-remote` (giống `docgraph`):
+
+```json
+{
+  "mcpServers": {
+    "harness": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote@latest", "http://127.0.0.1:8765/mcp"]
+    }
+  }
+}
+```
+
+Langfuse: image MCP đọc `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` từ `.env` (compose tự nội suy), còn `LANGFUSE_HOST` trỏ tới service `langfuse-web` trong cụm. Muốn chạy luôn stack Langfuse: `docker compose up -d` (không kèm tên service).
+
+> **Chọn transport:** dùng **Docker + HTTP** khi muốn cô lập/đóng gói (hết lo native `better-sqlite3`); dùng **stdio bundle** (mục trên) khi muốn agent thao tác trực tiếp file `.harness/` trên đĩa host bằng đường dẫn host.
 
 ---
 

@@ -3,16 +3,10 @@
     "harness": {
       "command": "C:/Program Files/nodejs/node.exe",
       "args": [
-        "${workspaceFolder}/node_modules/tsx/dist/cli.mjs",
-        "${workspaceFolder}/packages/mcp/src/index.ts"
-      ],
-      "cwd": "${workspaceFolder}",
-      "env": {
-        "HARNESS_DB_URL": "file:${workspaceFolder}/prisma/dev.db",
-        "LANGFUSE_HOST": "http://localhost:3001",
-        "LANGFUSE_PUBLIC_KEY": "pk-lf-da8ea102-8baa-47b0-8c28-e64073b967b8",
-        "LANGFUSE_SECRET_KEY": "sk-lf-7c4373f3-eab1-4556-9629-5fe4e02688a5"
-      }
+        "${workspaceFolder}/packages/mcp/dist/harness-mcp.mjs",
+        "--path",
+        "${workspaceFolder}"
+      ]
     }
   }
 }

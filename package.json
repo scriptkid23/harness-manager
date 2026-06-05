@@ -12,7 +12,7 @@
   "scripts": {
     "test": "vitest run",
     "build": "nx run-many -t build",
-    "postinstall": "prisma generate",
+    "postinstall": "prisma generate && pnpm --filter @harness/mcp build",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push"
   },

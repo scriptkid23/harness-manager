@@ -3,15 +3,19 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { getPrisma, HarnessService } from "@harness/core";
 import { createTracer } from "./tracing.js";
 import { buildToolHandlers, registerTools } from "./server.js";
+import { resolveBaseDir, applyRuntimeEnv } from "./runtime.js";
 
 const log = (msg: string) => process.stderr.write(`[harness-mcp] ${msg}\n`);
 
 async function main(): Promise<void> {
-  log("starting…");
+  // Everything the server needs is derived from the workspace dir, so the MCP
+  // config only has to pass `--path <workspaceFolder>` (no env / cwd needed).
+  const baseDir = resolveBaseDir(process.argv.slice(2));
+  applyRuntimeEnv(baseDir);
 
-  const dbUrl = process.env.HARNESS_DB_URL ?? "file:./prisma/dev.db";
+  log(`starting… (base=${baseDir})`);
   const langfuseOn = Boolean(process.env.LANGFUSE_PUBLIC_KEY && process.env.LANGFUSE_SECRET_KEY);
-  log(`db=${dbUrl} langfuse=${langfuseOn ? "on" : "off"}`);
+  log(`db=${process.env.HARNESS_DB_URL} langfuse=${langfuseOn ? "on" : "off"}`);
 
   const service = new HarnessService(getPrisma());
   const tracer = createTracer(process.env);
