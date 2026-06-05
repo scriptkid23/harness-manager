@@ -14,6 +14,8 @@ The source of truth lives in each repo's `.harness/` directory; SQLite is only a
 
 **Typical flow:** register a repo via the API or MCP → an agent edits `.harness/` via MCP → the dashboard reads it through the API.
 
+See **[Workflow guide](#workflow-guide--using-harness-mcp-on-your-repo)** for step-by-step prompts when you already have a repo.
+
 ---
 
 ## Requirements
@@ -206,29 +208,186 @@ Langfuse: the MCP image reads `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` from
 
 ---
 
-## Register a repo so the dashboard sees it
+## Workflow guide — using harness MCP on your repo
 
-The dashboard is **read-only**; a repo must be registered first.
+The harness MCP server gives an AI agent (Cursor / Claude) a **structured, persistent memory** for a project. Instead of losing context between chats, the agent reads and writes a `.harness/` folder in your repo and follows a disciplined session lifecycle.
 
-**Via the API:**
+### What gets stored
 
-```bash
-curl -X POST http://127.0.0.1:4000/repos `
-  -H "Content-Type: application/json" `
-  -d '{\"path\": \"D:/your-project\", \"name\": \"display-name\"}'
+| Artifact | Purpose |
+| -------- | ------- |
+| **config** | Project name, description, **hard constraints** (rules the agent must never break) |
+| **features** | Specs as *behavior + verification + state + evidence* — a feature is only "passing" with proof |
+| **progress** | Current commit, test status, completed / in-progress / blocked / next steps |
+| **decisions** | Architectural choices with rationale and **rejected** alternatives |
+| **sessions** | Clock-in / clock-out per work session (optional Langfuse trace) |
+
+The dashboard at **[http://localhost:3000](http://localhost:3000)** is read-only; agents write via MCP, humans observe via the API.
+
+### MCP tools (11)
+
+| Tool | When to use |
+| ---- | ----------- |
+| `harness_init` | Once per repo — create `.harness/` |
+| `harness_get_context` | **Start of every session** — load full snapshot + open session |
+| `harness_list_features` | List features (optional `state` filter) |
+| `harness_list_decisions` | List recorded decisions |
+| `harness_get_progress` | Read current progress |
+| `harness_update_feature` | Create or update a feature; set `active` when working on it |
+| `harness_set_feature_passing` | Mark done — **requires `evidence`** (test output) |
+| `harness_update_progress` | Update commit, test status, next steps |
+| `harness_add_decision` | Record a significant decision (+ `rejected`) |
+| `harness_upsert_agent` | Define agent roles and instructions |
+| `harness_handoff` | **End of every session** — summary + clean-state check |
+
+### `repoPath` — pick the right path
+
+Every tool takes `repoPath`. Use the path form that matches how MCP runs:
+
+| How MCP runs | `repoPath` example |
+| ------------ | ------------------ |
+| **Docker** (HTTP on `8765`) | `/projects/my-app` |
+| **Local stdio** | `C:/Users/you/Documents/project/my-app` |
+
+Docker mounts `HARNESS_PROJECTS_DIR` as `/projects` inside the container. The path must exist on disk from MCP's point of view.
+
+### Step-by-step workflow
+
+#### Step 0 — Prerequisites
+
+1. Harness Manager is running (local terminals or `docker compose up -d harness-api harness-web harness-mcp`).
+2. Cursor has the `harness` MCP server connected (stdio bundle or `http://127.0.0.1:8765/mcp`).
+3. You know your repo's `repoPath` (see table above).
+
+#### Step 1 — One-time init (repo has no `.harness/` yet)
+
+Paste this into Cursor (replace placeholders):
+
+```text
+Initialize harness for repo at <REPO_PATH>.
+
+1. harness_init:
+   name: "<PROJECT_NAME>"
+   description: "<SHORT_DESCRIPTION>"
+   hardConstraints: [
+     "No real network calls in unit tests",
+     "Any DB schema change must go through a migration"
+   ]
+
+2. harness_upsert_agent:
+   id: "builder", role: "implementer"
+   instructions: "Write code + tests. Do not change architecture without harness_add_decision."
+
+3. harness_update_feature for each planned feature (state: "not_started"):
+   - behavior: what it does
+   - verification: concrete check command (e.g. "pnpm test")
+
+4. harness_get_context — print snapshot for my confirmation.
 ```
 
-(PowerShell: use a backtick for line continuation, or put it on one line.)
+`harness_init` also registers the repo in the central index. After this, `.harness/` exists in your repo and `AGENTS.md` is generated.
 
-**Via MCP:** use the `harness_init` tool with `repoPath` pointing to an existing git directory.
+#### Step 2 — Register for the dashboard (if the card doesn't appear)
 
-Then refresh **[http://localhost:3000](http://localhost:3000)** — the repo card appears; click it to see the feature garden, decisions, and sessions.
+The dashboard only shows registered repos. If needed:
 
-**Re-sync the index from files** (after an agent edits `.harness/`):
+```bash
+# Local — host path
+curl -X POST http://127.0.0.1:4000/repos \
+  -H "Content-Type: application/json" \
+  -d '{"path": "C:/Users/you/project/my-app", "name": "my-app"}'
+
+# Docker — container path (must match the mount)
+curl -X POST http://127.0.0.1:4000/repos \
+  -H "Content-Type: application/json" \
+  -d '{"path": "/projects/my-app", "name": "my-app"}'
+```
+
+Refresh **[http://localhost:3000](http://localhost:3000)** — click the repo card for features, decisions, and sessions.
+
+**Re-sync index after agent edits `.harness/`:**
 
 ```bash
 curl -X POST http://127.0.0.1:4000/repos/<repo-id>/resync
 ```
+
+#### Step 3 — Start every work session
+
+```text
+Start a work session on repo <REPO_PATH>.
+
+1. harness_get_context — summarize: hard constraints, active features, nextSteps, recent decisions.
+2. Today I want to work on: "<TASK>".
+3. Map to a feature (or create one with behavior + verification), set state "active".
+4. Propose a short plan, then start. Update harness_update_progress as you go.
+```
+
+#### Step 4 — During work
+
+- **Feature in progress:** keep it `active` via `harness_update_progress`.
+- **Architecture choice:** `harness_add_decision` with `rationale` and `rejected`.
+- **Feature done:** run its `verification`, capture output as `evidence`, then `harness_set_feature_passing`. Never set passing without evidence.
+
+#### Step 5 — End every work session (handoff)
+
+```text
+End session on repo <REPO_PATH>.
+
+1. Completed features: run verification → evidence → harness_set_feature_passing.
+2. Unfinished features: move out of "active" (not_started or blocked), note reason in progress.
+3. Significant decisions: harness_add_decision.
+4. harness_handoff with updatedAt, currentCommit, testStatus, completed, nextSteps, summary.
+5. If clean-state check warns about active features, resolve and handoff again until clean.
+```
+
+A **clean handoff** means no feature left in `active` state.
+
+### Session lifecycle (diagram)
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│  ONCE PER REPO                                              │
+│  harness_init → harness_upsert_agent → harness_update_feature│
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│  EVERY SESSION                                              │
+│  harness_get_context                                        │
+│       ↓                                                     │
+│  harness_update_feature (active) → code + tests              │
+│       ↓                                                     │
+│  harness_update_progress / harness_add_decision              │
+│       ↓                                                     │
+│  harness_set_feature_passing (if done, with evidence)        │
+│       ↓                                                     │
+│  harness_handoff (must be clean)                            │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Agent rule (recommended — paste as a Cursor rule)
+
+```text
+When working with harness MCP on repo <REPO_PATH>:
+- Start every session: harness_get_context
+- End every session: harness_handoff (clean — no active features)
+- Never set passing without evidence
+- Every feature needs a concrete verification command
+- Respect hardConstraints; stop and report if a request violates them
+- Record major decisions via harness_add_decision (include rejected)
+```
+
+### Checklist — fully optimized harness
+
+- [ ] Every feature has a concrete `verification` command
+- [ ] `hardConstraints` declared at `init`
+- [ ] No feature set to `passing` without `evidence`
+- [ ] Each session opens with `get_context` and ends with a clean `handoff`
+- [ ] Major decisions recorded with `rejected` alternatives
+- [ ] `AGENTS.md` reflects constraints + active features + next steps
+- [ ] Dashboard shows the repo (registered + resynced if needed)
+
+More copy-paste prompts: **[docs/HARNESS_PROMPTS.md](docs/HARNESS_PROMPTS.md)**
 
 ---
 
