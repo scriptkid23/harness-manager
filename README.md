@@ -1,41 +1,41 @@
 # Harness Manager
 
-Bảng điều khiển local-first cho **Harness Engineering** trên nhiều repository.  
-Dữ liệu gốc nằm trong thư mục `.harness/` của từng repo; SQLite chỉ là **index có thể build lại**.
+A local-first dashboard for **Harness Engineering** across multiple repositories.
+The source of truth lives in each repo's `.harness/` directory; SQLite is only a **rebuildable index**.
 
 
-| Gói             | Vai trò                                                                     |
-| --------------- | --------------------------------------------------------------------------- |
-| `packages/core` | Schema, codec, validators, ghi file `.harness/`, index DB, `HarnessService` |
-| `packages/mcp`  | MCP server (stdio) — agent đọc/ghi harness qua Cursor/Claude                |
-| `packages/api`  | REST API (Fastify) — phục vụ dashboard                                      |
-| `packages/web`  | Dashboard Next.js (chỉ đọc) — xem repo, features, decisions, sessions       |
+| Package         | Role                                                                          |
+| --------------- | ----------------------------------------------------------------------------- |
+| `packages/core` | Schema, codec, validators, `.harness/` file writes, index DB, `HarnessService` |
+| `packages/mcp`  | MCP server (stdio + HTTP) — agents read/write the harness via Cursor/Claude   |
+| `packages/api`  | REST API (Fastify) — serves the dashboard                                     |
+| `packages/web`  | Next.js dashboard (read-only) — view repos, features, decisions, sessions     |
 
 
-**Luồng dùng thường gặp:** đăng ký repo qua API hoặc MCP → agent chỉnh `.harness/` qua MCP → dashboard đọc qua API.
+**Typical flow:** register a repo via the API or MCP → an agent edits `.harness/` via MCP → the dashboard reads it through the API.
 
 ---
 
-## Yêu cầu
+## Requirements
 
 - **Node.js** ≥ 20.9
-- **pnpm** 9.x (`corepack enable` rồi `corepack prepare pnpm@9.15.4 --activate` nếu chưa có)
+- **pnpm** 9.x (`corepack enable`, then `corepack prepare pnpm@9.15.4 --activate` if needed)
 - Windows / macOS / Linux
 
 ---
 
-## Cài đặt (lần đầu)
+## Setup (first time)
 
-### 1. Clone và cài dependency
+### 1. Clone and install dependencies
 
 ```bash
 cd harness-manager
 pnpm install
 ```
 
-Lệnh `postinstall` sẽ tự chạy `prisma generate`.
+`postinstall` automatically runs `prisma generate` and builds the MCP bundles.
 
-### 2. Biến môi trường
+### 2. Environment variables
 
 ```bash
 # Windows (PowerShell)
@@ -45,20 +45,20 @@ Copy-Item .env.example .env
 cp .env.example .env
 ```
 
-Chỉnh `.env` nếu cần:
+Adjust `.env` if needed:
 
 
-| Biến                  | Mặc định                     | Ý nghĩa                     |
-| --------------------- | ---------------------------- | --------------------------- |
-| `HARNESS_DB_URL`      | `file:./prisma/dev.db`       | SQLite index (cache)        |
-| `LANGFUSE_HOST`       | `https://cloud.langfuse.com` | Host Langfuse (tùy chọn)    |
-| `LANGFUSE_PUBLIC_KEY` | (trống)                      | Bật tracing session qua MCP |
-| `LANGFUSE_SECRET_KEY` | (trống)                      | Cặp với public key          |
+| Variable              | Default                      | Meaning                          |
+| --------------------- | ---------------------------- | -------------------------------- |
+| `HARNESS_DB_URL`      | `file:./prisma/dev.db`       | SQLite index (cache)             |
+| `LANGFUSE_HOST`       | `https://cloud.langfuse.com` | Langfuse host (optional)         |
+| `LANGFUSE_PUBLIC_KEY` | (empty)                      | Enables session tracing over MCP |
+| `LANGFUSE_SECRET_KEY` | (empty)                      | Paired with the public key       |
 
 
-Không có key Langfuse → tracing **tắt im lặng**, mọi thứ khác vẫn chạy.
+No Langfuse keys → tracing is a **silent no-op**, everything else still works.
 
-### 3. Tạo database
+### 3. Create the database
 
 **Windows (PowerShell):**
 
@@ -74,7 +74,7 @@ export HARNESS_DB_URL="file:./prisma/dev.db"
 pnpm exec prisma db push
 ```
 
-Hoặc dùng script có sẵn (đọc `HARNESS_DB_URL` từ `.env` nếu đã load):
+Or use the bundled script (reads `HARNESS_DB_URL` from `.env` if it's loaded):
 
 ```bash
 pnpm prisma:push
@@ -82,29 +82,29 @@ pnpm prisma:push
 
 ---
 
-## Chạy dự án
+## Running the project
 
-Cần **hai terminal** cho dashboard đầy đủ (API + Web). MCP chạy riêng khi cấu hình agent.
+A full dashboard needs **two terminals** (API + Web). MCP runs separately when you configure an agent.
 
-### Terminal 1 — API (cổng 4000)
+### Terminal 1 — API (port 4000)
 
 ```bash
 pnpm exec tsx packages/api/src/index.ts
 ```
 
-Thấy dòng: `harness-api listening on http://127.0.0.1:4000`
+You should see: `harness-api listening on http://127.0.0.1:4000`
 
-Đổi cổng: `$env:PORT=5000` (PowerShell) hoặc `PORT=5000` (bash) trước khi chạy.
+Change the port: `$env:PORT=5000` (PowerShell) or `PORT=5000` (bash) before running.
 
-### Terminal 2 — Dashboard (cổng 3000)
+### Terminal 2 — Dashboard (port 3000)
 
 ```bash
 pnpm --filter @harness/web dev
 ```
 
-Mở trình duyệt: **[http://localhost:3000](http://localhost:3000)**
+Open your browser: **[http://localhost:3000](http://localhost:3000)**
 
-Dashboard gọi API tại `http://127.0.0.1:4000`. Đổi URL API:
+The dashboard calls the API at `http://127.0.0.1:4000`. Override the API URL:
 
 ```bash
 # PowerShell
@@ -112,23 +112,23 @@ $env:HARNESS_API_BASE = "http://127.0.0.1:4000"
 pnpm --filter @harness/web dev
 ```
 
-### MCP server (stdio) — cho Cursor / Claude
+### MCP server (stdio) — for Cursor / Claude
 
-MCP server chạy từ **một file bundle đã build** (`packages/mcp/dist/harness-mcp.mjs`), không cần `tsx` nữa.
-Build chạy tự động trong `postinstall`; build lại thủ công khi sửa code MCP:
+The MCP server runs from a **prebuilt bundle** (`packages/mcp/dist/harness-mcp.mjs`), so `tsx` is no longer required.
+The build runs automatically in `postinstall`; rebuild manually after changing MCP code:
 
 ```bash
 pnpm --filter @harness/mcp build
 ```
 
-Chạy trực tiếp (debug):
+Run it directly (debug):
 
 ```bash
 node packages/mcp/dist/harness-mcp.mjs --path .
 ```
 
-**Cấu hình Cursor** — repo đã có sẵn `.cursor/mcp.json` rất gọn (không `env`, không `cwd`):
-server tự suy DB ra `file:<path>/prisma/dev.db` (tuyệt đối) và tự nạp `<path>/.env` để lấy key Langfuse.
+**Cursor config** — the repo ships a very lean `.cursor/mcp.json` (no `env`, no `cwd`):
+the server derives the DB as `file:<path>/prisma/dev.db` (absolute) and loads `<path>/.env` for the Langfuse keys.
 
 ```json
 {
@@ -145,39 +145,39 @@ server tự suy DB ra `file:<path>/prisma/dev.db` (tuyệt đối) và tự nạ
 }
 ```
 
-`${workspaceFolder}` được Cursor thay bằng đường dẫn repo, nên config dùng được trên mọi máy mà không sửa path.
+Cursor replaces `${workspaceFolder}` with the repo path, so the config works on any machine without editing paths.
 
-**Vì sao vẫn là `node.exe` chứ không phải lệnh trần `harness-mcp`?** Trên Windows, Cursor spawn MCP **không qua shell**, nên các shim `.cmd`/`.ps1` (thứ duy nhất `pnpm/npm link` tạo ra cho tool Node) gây `Connection closed`. Lệnh trần chỉ chạy ổn nếu là **native `.exe`**. Ngoài ra đường dẫn `node.exe` còn ghim đúng Node 20 — cùng Node đã build `better-sqlite3` (Node 22 sẽ lỗi `NODE_MODULE_VERSION`).
+**Why still `node.exe` rather than a bare `harness-mcp` command?** On Windows, Cursor spawns MCP servers **without a shell**, so the `.cmd`/`.ps1` shims (the only thing `pnpm/npm link` produces for a Node tool) cause `Connection closed`. A bare command only works reliably as a native `.exe`. The explicit `node.exe` path also pins Node 20 — the same Node that built `better-sqlite3` (Node 22 throws `NODE_MODULE_VERSION`).
 
-Mọi secret (key Langfuse) để trong `.env` ở root repo, **không** đặt trong `mcp.json`. Sau khi sửa config: **tắt/bật lại** server `harness` trong MCP settings.
+Keep all secrets (Langfuse keys) in the root `.env`, **not** in `mcp.json`. After editing the config: **toggle** the `harness` server off/on in MCP settings.
 
 ---
 
-## Chạy bằng Docker (cả cụm)
+## Running with Docker (whole stack)
 
-Thay vì chạy tay từng tiến trình, có thể dựng cả cụm bằng compose. Image chung cho 3 service (api/web/mcp), một index SQLite trung tâm nằm trên volume `harness_db`.
+Instead of running each process by hand, you can bring up the whole stack with compose. A single image is shared by all three services (api/web/mcp), with one central SQLite index on the `harness_db` volume.
 
 ```bash
-# Build + chạy app harness (api 4000, web 3000, mcp 8765)
+# Build + run the harness app (api 4000, web 3000, mcp 8765)
 docker compose up -d harness-api harness-web harness-mcp
 
-# Mở dashboard
+# Open the dashboard
 #   http://localhost:3000
 # MCP Streamable HTTP:
 #   http://localhost:8765/mcp   (health: http://localhost:8765/health)
 ```
 
-`harness-migrate` (chạy một lần, tự `prisma db push`) khởi tạo schema trước khi `api`/`mcp` lên.
+`harness-migrate` (a one-shot service that runs `prisma db push`) initializes the schema before `api`/`mcp` start.
 
-**Repo cần quản lý phải được mount vào container.** Đặt trong `.env` ở root:
+**Repos you want to manage must be mounted into the container.** Set this in the root `.env`:
 
 ```bash
-HARNESS_PROJECTS_DIR=C:/Users/hoan.do/Documents/project   # thư mục CHA chứa các repo
+HARNESS_PROJECTS_DIR=C:/Users/hoan.do/Documents/project   # PARENT folder that contains your repos
 ```
 
-Thư mục này được mount thành `/projects` trong container. **Quan trọng:** khi gọi tool MCP, truyền `repoPath` theo **đường dẫn trong container**, ví dụ `/projects/lua-dag-consensus` (không phải path host) — vì MCP chạy cô lập filesystem.
+This folder is mounted as `/projects` inside the container. **Important:** when calling MCP tools, pass `repoPath` as a **container path**, e.g. `/projects/lua-dag-consensus` (not the host path) — the MCP server has an isolated filesystem.
 
-**Cấu hình Cursor cho MCP qua HTTP** (đúng kiểu "chỉ connect tới 1 port"):
+**Cursor config for MCP over HTTP** (the "just connect to a port" style):
 
 ```json
 {
@@ -187,7 +187,7 @@ Thư mục này được mount thành `/projects` trong container. **Quan trọn
 }
 ```
 
-Nếu bản Cursor chưa hỗ trợ trường `url`, dùng proxy `mcp-remote` (giống `docgraph`):
+If your Cursor build doesn't support the `url` field yet, use the `mcp-remote` proxy (like `docgraph`):
 
 ```json
 {
@@ -200,31 +200,31 @@ Nếu bản Cursor chưa hỗ trợ trường `url`, dùng proxy `mcp-remote` (g
 }
 ```
 
-Langfuse: image MCP đọc `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` từ `.env` (compose tự nội suy), còn `LANGFUSE_HOST` trỏ tới service `langfuse-web` trong cụm. Muốn chạy luôn stack Langfuse: `docker compose up -d` (không kèm tên service).
+Langfuse: the MCP image reads `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` from `.env` (compose interpolates them), while `LANGFUSE_HOST` points at the in-cluster `langfuse-web` service. To also run the Langfuse stack: `docker compose up -d` (without naming a service).
 
-> **Chọn transport:** dùng **Docker + HTTP** khi muốn cô lập/đóng gói (hết lo native `better-sqlite3`); dùng **stdio bundle** (mục trên) khi muốn agent thao tác trực tiếp file `.harness/` trên đĩa host bằng đường dẫn host.
+> **Choosing a transport:** use **Docker + HTTP** when you want isolation/packaging (no native `better-sqlite3` worries); use the **stdio bundle** (section above) when you want the agent to operate directly on `.harness/` files on the host disk using host paths.
 
 ---
 
-## Đăng ký repo để dashboard thấy
+## Register a repo so the dashboard sees it
 
-Dashboard **chỉ đọc**; repo phải được đăng ký trước.
+The dashboard is **read-only**; a repo must be registered first.
 
-**Qua API:**
+**Via the API:**
 
 ```bash
 curl -X POST http://127.0.0.1:4000/repos `
   -H "Content-Type: application/json" `
-  -d '{\"path\": \"D:/du-an-cua-ban\", \"name\": \"ten-hien-thi\"}'
+  -d '{\"path\": \"D:/your-project\", \"name\": \"display-name\"}'
 ```
 
-(PowerShell: dùng backtick xuống dòng hoặc gộp một dòng.)
+(PowerShell: use a backtick for line continuation, or put it on one line.)
 
-**Qua MCP:** dùng tool `harness_init` với `repoPath` trỏ tới thư mục git đã tồn tại.
+**Via MCP:** use the `harness_init` tool with `repoPath` pointing to an existing git directory.
 
-Sau đó refresh **[http://localhost:3000](http://localhost:3000)** — card repo xuất hiện; bấm vào để xem feature garden, decisions, sessions.
+Then refresh **[http://localhost:3000](http://localhost:3000)** — the repo card appears; click it to see the feature garden, decisions, and sessions.
 
-**Đồng bộ lại index từ file** (sau khi agent sửa `.harness/`):
+**Re-sync the index from files** (after an agent edits `.harness/`):
 
 ```bash
 curl -X POST http://127.0.0.1:4000/repos/<repo-id>/resync
@@ -232,62 +232,59 @@ curl -X POST http://127.0.0.1:4000/repos/<repo-id>/resync
 
 ---
 
-## Chạy test
+## Running tests
 
 ```bash
-# Toàn workspace (core, mcp, api, web)
+# Whole workspace (core, mcp, api, web)
 pnpm exec vitest run
 
-# Từng gói
+# Per package
 pnpm exec vitest run packages/core
 pnpm exec vitest run packages/mcp
 pnpm exec vitest run packages/api
 pnpm exec vitest run packages/web
 ```
 
-## Build production (web)
+## Production build (web)
 
 ```bash
 pnpm --filter @harness/web build
 pnpm --filter @harness/web start
 ```
 
-Vẫn cần API chạy song song.
+The API still needs to run alongside it.
 
 ---
 
-## Xử lý lỗi thường gặp
+## Troubleshooting
 
-
-| Triệu chứng                 | Cách xử lý                                                 |
-| --------------------------- | ---------------------------------------------------------- |
-| Dashboard trống / lỗi fetch | Kiểm tra API đang chạy ở `4000`, `HARNESS_API_BASE` khớp   |
-| `prisma db push` lỗi        | Đặt `HARNESS_DB_URL`, chạy từ root repo                    |
-| MCP `Connection closed`     | Windows: dùng `node.exe` + `tsx` (xem mục MCP), không dùng `pnpm`; `cwd` tuyệt đối; cùng Node khi `pnpm rebuild better-sqlite3` |
-| MCP không kết nối           | `cwd` trỏ đúng root repo; xem log MCP trong Cursor Output |
-| Repo không hiện             | POST `/repos` với `path` **tồn tại trên đĩa**              |
-
+| Symptom                       | Fix                                                                                                |
+| ----------------------------- | -------------------------------------------------------------------------------------------------- |
+| Empty dashboard / fetch error | Check the API is running on `4000` and `HARNESS_API_BASE` matches                                  |
+| `prisma db push` fails        | Set `HARNESS_DB_URL` and run from the repo root                                                    |
+| MCP `Connection closed`       | Windows: use `node.exe` + the built bundle (see the MCP section), not `pnpm`; pass an absolute `--path`; rebuild `better-sqlite3` with the same Node version |
+| MCP won't connect             | Make sure `--path` points at the repo root; check the MCP log in Cursor Output                     |
+| Repo doesn't show up          | POST `/repos` with a `path` that **exists on disk** (or `/projects/...` in Docker)                 |
 
 ---
 
-## Langfuse (tùy chọn)
+## Langfuse (optional)
 
-Điền `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST` trong `.env`.  
-MCP ghi trace khi agent clock-in/clock-out session; dashboard hiện link trace dạng placeholder (`#trace-<id>`) — có thể nối URL Langfuse thật sau.
+Fill in `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST` in `.env`.
+The MCP server writes a trace when an agent clocks in/out of a session; the dashboard shows a placeholder trace link (`#trace-<id>`) — you can wire it to the real Langfuse URL later.
 
 ---
 
-## Tóm tắt lệnh nhanh
+## Quick command reference
 
 ```powershell
-# Setup một lần
+# One-time setup
 pnpm install
 Copy-Item .env.example .env
 $env:HARNESS_DB_URL = "file:./prisma/dev.db"
 pnpm exec prisma db push
 
-# Chạy hàng ngày (2 terminal)
+# Daily run (2 terminals)
 pnpm exec tsx packages/api/src/index.ts
 pnpm --filter @harness/web dev
 ```
-
