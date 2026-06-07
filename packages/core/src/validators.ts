@@ -16,7 +16,7 @@ export function checkWipLimit(features: Feature[], targetId: string): WipCheck {
 export function assertPassEvidence(featureId: string, evidence: string | undefined): void {
   if (!evidence || evidence.trim() === "") {
     throw new HarnessError({
-      path: ".harness/features.json",
+      path: "features",
       message: `feature ${featureId} cannot be set 'passing' without evidence`,
       fix: "Provide a commit hash or test-log reference as evidence, then retry.",
     });

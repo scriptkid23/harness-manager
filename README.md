@@ -1,18 +1,18 @@
 # Harness Manager
 
 A local-first dashboard for **Harness Engineering** across multiple repositories.
-The source of truth lives in each repo's `.harness/` directory; SQLite is only a **rebuildable index**.
+The source of truth lives in the **central SQLite database**; `repoPath` is a logical key (e.g. `/projects/socmint`), not a filesystem path.
 
 
 | Package         | Role                                                                          |
 | --------------- | ----------------------------------------------------------------------------- |
-| `packages/core` | Schema, codec, validators, `.harness/` file writes, index DB, `HarnessService` |
+| `packages/core` | Schema, codec, validators, DB store, `HarnessService` |
 | `packages/mcp`  | MCP server (stdio + HTTP) — agents read/write the harness via Cursor/Claude   |
 | `packages/api`  | REST API (Fastify) — serves the dashboard                                     |
 | `packages/web`  | Next.js dashboard (read-only) — view repos, features, decisions, sessions     |
 
 
-**Typical flow:** register a repo via the API or MCP → an agent edits `.harness/` via MCP → the dashboard reads it through the API.
+**Typical flow:** register a repo via the API or MCP → an agent writes harness state via MCP → the dashboard reads it through the API.
 
 See **[Workflow guide](#workflow-guide--using-harness-mcp-on-your-repo)** for step-by-step prompts when you already have a repo.
 For the **recommended minimal setup** (planner / coder / reviewer / architect + Superpowers), see **[Recommended setup](#recommended-setup-minimal)**.
@@ -172,13 +172,7 @@ docker compose up -d harness-api harness-web harness-mcp
 
 `harness-migrate` (a one-shot service that runs `prisma db push`) initializes the schema before `api`/`mcp` start.
 
-**Repos you want to manage must be mounted into the container.** Set this in the root `.env`:
-
-```bash
-HARNESS_PROJECTS_DIR=C:/Users/hoan.do/Documents/project   # PARENT folder that contains your repos
-```
-
-This folder is mounted as `/projects` inside the container. **Important:** when calling MCP tools, pass `repoPath` as a **container path**, e.g. `/projects/lua-dag-consensus` (not the host path) — the MCP server has an isolated filesystem.
+**`repoPath` is a logical key** (e.g. `/projects/socmint`). It does not need to exist on disk — all harness state lives in the `harness_db` volume.
 
 **Cursor config for MCP over HTTP** (the "just connect to a port" style):
 
@@ -205,13 +199,13 @@ If your Cursor build doesn't support the `url` field yet, use the `mcp-remote` p
 
 Langfuse: the MCP image reads `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` from `.env` (compose interpolates them), while `LANGFUSE_HOST` points at the in-cluster `langfuse-web` service. To also run the Langfuse stack: `docker compose up -d` (without naming a service).
 
-> **Choosing a transport:** use **Docker + HTTP** when you want isolation/packaging (no native `better-sqlite3` worries); use the **stdio bundle** (section above) when you want the agent to operate directly on `.harness/` files on the host disk using host paths.
+> **Choosing a transport:** use **Docker + HTTP** when you want isolation/packaging (no native `better-sqlite3` worries); use the **stdio bundle** (section above) for a local MCP process sharing the same SQLite database.
 
 ---
 
 ## Workflow guide — using harness MCP on your repo
 
-The harness MCP server gives an AI agent (Cursor / Claude) a **structured, persistent memory** for a project. Instead of losing context between chats, the agent reads and writes a `.harness/` folder in your repo and follows a disciplined session lifecycle.
+The harness MCP server gives an AI agent (Cursor / Claude) a **structured, persistent memory** for a project. Instead of losing context between chats, the agent reads and writes harness state in the central database and follows a disciplined session lifecycle.
 
 ### What gets stored
 
@@ -229,7 +223,7 @@ The dashboard at **[http://localhost:3000](http://localhost:3000)** is read-only
 
 | Tool | When to use |
 | ---- | ----------- |
-| `harness_init` | Once per repo — create `.harness/` |
+| `harness_init` | Once per repo — seed config, progress, and register in DB |
 | `harness_get_context` | **Start of every session** — load full snapshot + open session |
 | `harness_list_features` | List features (optional `state` filter) |
 | `harness_list_decisions` | List recorded decisions |
@@ -243,14 +237,14 @@ The dashboard at **[http://localhost:3000](http://localhost:3000)** is read-only
 
 ### `repoPath` — pick the right path
 
-Every tool takes `repoPath`. Use the path form that matches how MCP runs:
+Every tool takes `repoPath` — a **stable logical identifier** for the project:
 
-| How MCP runs | `repoPath` example |
-| ------------ | ------------------ |
-| **Docker** (HTTP on `8765`) | `/projects/my-app` |
-| **Local stdio** | `C:/Users/you/Documents/project/my-app` |
+| Example `repoPath` | Notes |
+| ------------------ | ----- |
+| `/projects/socmint` | Recommended convention |
+| `socmint` | Also valid — pick one and stay consistent |
 
-Docker mounts `HARNESS_PROJECTS_DIR` as `/projects` inside the container. The path must exist on disk from MCP's point of view.
+The path does not need to exist on disk. Use the same `repoPath` in every session for that project.
 
 ### Step-by-step workflow
 
@@ -260,12 +254,12 @@ Docker mounts `HARNESS_PROJECTS_DIR` as `/projects` inside the container. The pa
 2. Cursor has the `harness` MCP server connected (stdio bundle or `http://127.0.0.1:8765/mcp`).
 3. You know your repo's `repoPath` (see table above).
 
-#### Step 1 — One-time init (repo has no `.harness/` yet)
+#### Step 1 — One-time init (repo not registered yet)
 
 Use the **[recommended multi-agent init](#step-1b--multi-agent-init-paste-once-per-repo)** below (planner / coder / reviewer / architect).
 For a single-agent repo, see **[docs/HARNESS_PROMPTS.md](docs/HARNESS_PROMPTS.md)** (builder-only init).
 
-`harness_init` also registers the repo in the central index. After this, `.harness/` exists in your repo and `AGENTS.md` is generated.
+`harness_init` registers the repo and seeds config, progress, features, agents, and decisions in the central database.
 
 #### Step 2 — Register for the dashboard (if the card doesn't appear)
 

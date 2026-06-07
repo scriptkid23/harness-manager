@@ -7,12 +7,14 @@ Replace every `<PLACEHOLDER>` with your own values.
 
 | Layer | What to create | Purpose |
 | ----- | -------------- | ------- |
-| **Harness** | `.harness/` via MCP init | Source of truth: agents, features, decisions, progress |
+| **Harness** | MCP init + tools | Source of truth in central DB: agents, features, decisions, progress |
 | **Superpowers** | Enable plugin in Cursor | Skills referenced inside `.harness/agents/*.md` |
 | **Cursor rules** | **One** `harness-lifecycle.mdc` | Trigger MCP lifecycle — do not duplicate agent instructions |
 
-Agent role definitions and Superpowers skill lists live in `.harness/agents/`, not in Cursor rules.
-`AGENTS.md` is auto-generated and lists agent ids only; full instructions come from `harness_get_context`.
+Agent role definitions and Superpowers skill lists are stored via `harness_upsert_agent` in the central database.
+Full instructions come from `harness_get_context`.
+
+> **`repoPath`** is a logical key (e.g. `/projects/socmint`). It does not need to exist on disk.
 
 ---
 

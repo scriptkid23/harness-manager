@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { execSync } from "node:child_process";
-import { mkdtemp, rm, readFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getPrisma, HarnessService } from "@harness/core";
@@ -21,8 +21,8 @@ beforeAll(async () => {
 afterAll(async () => { await prisma.$disconnect(); await rm(workDir, { recursive: true, force: true }); });
 
 describe("E2E: init → context → feature → passing → handoff", () => {
-  it("completes the full flow and records files + a closed session", async () => {
-    const repoPath = await mkdtemp(join(workDir, "repo-"));
+  it("completes the full flow and records DB state + a closed session", async () => {
+    const repoPath = `/projects/e2e-${Date.now()}`;
 
     expect((await handlers.harness_init({ repoPath, name: "demo", hardConstraints: ["no force push"] })).isError).toBeFalsy();
     expect((await handlers.harness_get_context({ repoPath })).isError).toBeFalsy();
@@ -31,12 +31,11 @@ describe("E2E: init → context → feature → passing → handoff", () => {
     const handoff = await handlers.harness_handoff({ repoPath, updatedAt: "2026-06-04T12:00:00Z", summary: "done", completed: ["F01"] });
     expect(handoff.isError).toBeFalsy();
 
-    const features = JSON.parse(await readFile(join(repoPath, ".harness", "features.json"), "utf8"));
-    expect(features[0]).toMatchObject({ id: "F01", state: "passing", evidence: "commit abc123" });
-    const agentsMd = await readFile(join(repoPath, "AGENTS.md"), "utf8");
-    expect(agentsMd).toContain("no force push");
-
     const repo = await prisma.repo.findUnique({ where: { path: repoPath } });
+    const features = await prisma.feature.findMany({ where: { repoId: repo!.id } });
+    expect(features[0]).toMatchObject({ featureId: "F01", state: "passing", evidence: "commit abc123" });
+    expect(repo?.hardConstraints).toContain("no force push");
+
     const sessions = await prisma.session.findMany({ where: { repoId: repo!.id } });
     expect(sessions.length).toBe(1);
     expect(sessions[0]?.endedAt).not.toBeNull();

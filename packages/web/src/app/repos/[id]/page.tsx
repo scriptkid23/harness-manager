@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { ArrowLeft, Clock, ExternalLink, ScrollText } from "lucide-react";
-import { repoFeatures, repoDecisions, repoSessions } from "@/lib/api";
+import { repo, repoFeatures, repoDecisions, repoSessions, repoAgents, parseJsonArray } from "@/lib/api";
 import { FeatureBoard } from "@/components/FeatureBoard";
+import { RepoConfig } from "@/components/RepoConfig";
+import { AgentList } from "@/components/AgentList";
 import { SectionHeading } from "@/components/SectionHeading";
 import { VineDivider } from "@/components/VineDivider";
 import { Card } from "@/components/ui/Card";
@@ -10,10 +12,12 @@ export const dynamic = "force-dynamic";
 
 export default async function RepoDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [features, decisions, sessions] = await Promise.all([
+  const [repoRow, features, decisions, sessions, agents] = await Promise.all([
+    repo(id),
     repoFeatures(id),
     repoDecisions(id),
     repoSessions(id),
+    repoAgents(id),
   ]);
 
   return (
@@ -24,6 +28,34 @@ export default async function RepoDetail({ params }: { params: Promise<{ id: str
       >
         <ArrowLeft strokeWidth={1.5} className="h-4 w-4" /> All repositories
       </Link>
+
+      <section>
+        <SectionHeading>
+          Repository <span className="font-normal italic text-sage">config</span>
+        </SectionHeading>
+        <div className="mt-10">
+          <RepoConfig
+            name={repoRow.name}
+            description={repoRow.description}
+            hardConstraints={parseJsonArray(repoRow.hardConstraints)}
+            langfuseProjectId={repoRow.langfuseProjectId}
+            indexedAt={repoRow.indexedAt}
+          />
+        </div>
+      </section>
+
+      <VineDivider />
+
+      <section>
+        <SectionHeading>
+          <span className="font-normal italic text-sage">Agents</span>
+        </SectionHeading>
+        <div className="mt-10">
+          <AgentList agents={agents} />
+        </div>
+      </section>
+
+      <VineDivider />
 
       <section>
         <SectionHeading>

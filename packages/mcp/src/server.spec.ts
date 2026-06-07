@@ -20,7 +20,7 @@ beforeAll(async () => {
   handlers = buildToolHandlers(new HarnessService(prisma), createTracer({}));
 });
 afterAll(async () => { await prisma.$disconnect(); await rm(workDir, { recursive: true, force: true }); });
-beforeEach(async () => { repoPath = await mkdtemp(join(workDir, "repo-")); });
+beforeEach(() => { repoPath = `/projects/mcp-test-${Date.now()}`; });
 
 describe("MCP tool handlers", () => {
   it("harness_init then harness_get_context returns overview text", async () => {

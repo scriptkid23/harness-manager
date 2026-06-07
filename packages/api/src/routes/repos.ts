@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
-import { getPrisma, HarnessError, type HarnessService } from "@harness/core";
-import { access } from "node:fs/promises";
+import { HarnessError, type HarnessService } from "@harness/core";
+import { getPrisma } from "@harness/core";
 
 type PrismaClient = ReturnType<typeof getPrisma>;
 
@@ -16,11 +16,6 @@ export async function registerRepoRoutes(
   app.post<{ Body: { path: string; name?: string; description?: string } }>("/repos", async (req, reply) => {
     const { path, name, description } = req.body;
     try {
-      await access(path);
-    } catch {
-      return reply.code(400).send({ error: `path '${path}' does not exist or is not accessible` });
-    }
-    try {
       await service.init(path, { name: name ?? path, description, hardConstraints: [] });
     } catch (e) {
       if (e instanceof HarnessError) return reply.code(400).send({ error: e.message });
@@ -33,16 +28,16 @@ export async function registerRepoRoutes(
   app.post<{ Params: { id: string } }>("/repos/:id/resync", async (req, reply) => {
     const repo = await prisma.repo.findUnique({ where: { id: req.params.id } });
     if (!repo) return reply.code(404).send({ error: "repo not found" });
-    try {
-      await service.getContext(repo.path);
-    } catch (e) {
-      if (e instanceof HarnessError) return reply.code(409).send({ error: e.message });
-      throw e;
-    }
     return { ok: true };
   });
 
   const byId = async (id: string) => prisma.repo.findUnique({ where: { id } });
+
+  app.get<{ Params: { id: string } }>("/repos/:id", async (req, reply) => {
+    const repo = await byId(req.params.id);
+    if (!repo) return reply.code(404).send({ error: "repo not found" });
+    return repo;
+  });
 
   app.get<{ Params: { id: string } }>("/repos/:id/context", async (req, reply) => {
     const repo = await byId(req.params.id);

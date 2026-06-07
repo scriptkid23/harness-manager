@@ -23,9 +23,7 @@ afterAll(async () => {
   await prisma.$disconnect();
   await rm(workDir, { recursive: true, force: true });
 });
-beforeEach(async () => {
-  repoPath = await mkdtemp(join(workDir, "repo-"));
-});
+beforeEach(() => { repoPath = `/projects/api-test-${Date.now()}`; });
 
 describe("API", () => {
   it("POST /repos registers + scaffolds, GET /repos lists it", async () => {
@@ -35,23 +33,34 @@ describe("API", () => {
     expect(list.json().some((r: { path: string }) => r.path === repoPath)).toBe(true);
   });
 
-  it("GET /repos/:id/features returns indexed features after resync", async () => {
+  it("GET /repos/:id/features returns features after service write", async () => {
     const post = await app.inject({ method: "POST", url: "/repos", payload: { path: repoPath, name: "demo" } });
     const id = post.json().id;
     await new HarnessService(prisma).upsertFeature(repoPath, { id: "F01", behavior: "b", verification: "t", state: "active" });
-    await app.inject({ method: "POST", url: `/repos/${id}/resync` });
     const res = await app.inject({ method: "GET", url: `/repos/${id}/features` });
     expect(res.json().map((f: { featureId: string }) => f.featureId)).toContain("F01");
   });
 
-  it("returns 400 with a clear message when registering a path that does not exist", async () => {
+  it("POST /repos accepts a logical path that does not exist on disk", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/repos",
-      payload: { path: join(workDir, "does-not-exist"), name: "x" },
+      payload: { path: "/projects/socmint", name: "socmint" },
     });
-    expect(res.statusCode).toBe(400);
-    expect(res.json().error).toMatch(/path/i);
+    expect(res.statusCode).toBe(201);
+    expect(res.json().path).toBe("/projects/socmint");
+  });
+
+  it("GET /repos/:id returns repo config fields", async () => {
+    const post = await app.inject({
+      method: "POST",
+      url: "/repos",
+      payload: { path: "/projects/config-test", name: "config-test" },
+    });
+    const id = post.json().id;
+    const res = await app.inject({ method: "GET", url: `/repos/${id}` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().name).toBe("config-test");
   });
 
   it("returns 404 for an unknown repo id", async () => {

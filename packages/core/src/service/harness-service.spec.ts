@@ -3,8 +3,8 @@ import { execSync } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getPrisma } from "../db/client";
-import { HarnessService } from "./harness-service";
+import { getPrisma } from "../db/client.js";
+import { HarnessService } from "./harness-service.js";
 
 let workDir: string;
 let dbUrl: string;
@@ -20,7 +20,7 @@ beforeAll(async () => {
   service = new HarnessService(prisma);
 });
 afterAll(async () => { await prisma.$disconnect(); await rm(workDir, { recursive: true, force: true }); });
-beforeEach(async () => { repoPath = await mkdtemp(join(workDir, "repo-")); });
+beforeEach(() => { repoPath = `/projects/test-${Date.now()}`; });
 
 describe("HarnessService", () => {
   it("init scaffolds, auto-registers the repo, and indexes", async () => {

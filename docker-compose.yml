@@ -202,7 +202,7 @@ services:
       - "3000:3000"
 
   # MCP exposed over Streamable HTTP. Agents connect to http://localhost:8765/mcp.
-  # Repos to manage are bind-mounted under /projects; pass repoPath as /projects/<repo>.
+  # repoPath is a logical key (e.g. /projects/socmint); all state lives in harness_db.
   harness-mcp:
     image: harness-manager:local
     restart: unless-stopped
@@ -221,8 +221,6 @@ services:
       - "8765:8765"
     volumes:
       - harness_db:/data
-      # Host folder that contains the repos you want to manage (override in .env).
-      - ${HARNESS_PROJECTS_DIR:-./projects}:/projects
 
 volumes:
   langfuse_postgres_data:
