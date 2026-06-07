@@ -1,12 +1,12 @@
 import type { FeatureRow } from "@/lib/api";
-import { Sprout, Sun, Unlink, Flower2 } from "lucide-react";
+import { Circle, CircleDot, Ban, CheckCircle2 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 
 const COLUMNS = [
-  { state: "not_started", label: "Dormant", Icon: Sprout },
-  { state: "active", label: "Growing", Icon: Sun },
-  { state: "blocked", label: "Tangled", Icon: Unlink },
-  { state: "passing", label: "Flourishing", Icon: Flower2 },
+  { state: "not_started", label: "Backlog", Icon: Circle },
+  { state: "active", label: "In Progress", Icon: CircleDot },
+  { state: "blocked", label: "Blocked", Icon: Ban },
+  { state: "passing", label: "Verified", Icon: CheckCircle2 },
 ];
 
 export function FeatureBoard({ features }: { features: FeatureRow[] }) {
@@ -30,7 +30,7 @@ export function FeatureBoard({ features }: { features: FeatureRow[] }) {
                   verify <code className="text-terracotta">{f.verification}</code>
                 </p>
                 {f.evidence ? (
-                  <p className="mb-0 mt-2 text-xs text-sage">✿ evidence: {f.evidence}</p>
+                  <p className="mb-0 mt-2 text-xs text-sage">✓ evidence: {f.evidence}</p>
                 ) : null}
               </Card>
             ))}

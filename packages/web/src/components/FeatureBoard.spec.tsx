@@ -9,10 +9,10 @@ const features: FeatureRow[] = [
 ];
 
 describe("FeatureBoard", () => {
-  it("groups features into botanical columns by state and shows evidence", () => {
+  it("groups features into status columns by state and shows evidence", () => {
     render(<FeatureBoard features={features} />);
-    expect(screen.getByText("Growing")).toBeInTheDocument();
-    expect(screen.getByText("Flourishing")).toBeInTheDocument();
+    expect(screen.getByText("In Progress")).toBeInTheDocument();
+    expect(screen.getByText("Verified")).toBeInTheDocument();
     expect(screen.getByText("logs in")).toBeInTheDocument();
     expect(screen.getByText("logs out")).toBeInTheDocument();
     expect(screen.getByText(/evidence: abc/)).toBeInTheDocument();

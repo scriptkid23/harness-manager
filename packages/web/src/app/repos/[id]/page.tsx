@@ -27,10 +27,10 @@ export default async function RepoDetail({ params }: { params: Promise<{ id: str
 
       <section>
         <SectionHeading>
-          The <span className="font-normal italic text-sage">feature</span> garden
+          Feature <span className="font-normal italic text-sage">board</span>
         </SectionHeading>
         <p className="mb-10 mt-3 text-lg text-forest/60">
-          Each behavior, sorted by how well it has taken root.
+          Each behavior, grouped by status — verified only with evidence.
         </p>
         <FeatureBoard features={features} />
       </section>
