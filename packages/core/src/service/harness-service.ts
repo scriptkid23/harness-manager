@@ -34,6 +34,21 @@ export class HarnessService {
     return this.store(repoPath).read();
   }
 
+  /** Update repo config without wiping features, agents, or decisions. */
+  async updateConfig(
+    repoPath: string,
+    patch: { name?: string; description?: string; hardConstraints?: string[]; langfuseProjectId?: string },
+  ): Promise<HarnessSnapshot> {
+    const snap = await this.store(repoPath).read();
+    await this.store(repoPath).writeConfig({
+      name: patch.name ?? snap.config.name,
+      description: patch.description ?? snap.config.description,
+      hardConstraints: patch.hardConstraints ?? snap.config.hardConstraints,
+      langfuseProjectId: patch.langfuseProjectId ?? snap.config.langfuseProjectId,
+    });
+    return this.store(repoPath).read();
+  }
+
   async upsertFeature(repoPath: string, feature: Feature): Promise<WriteResult> {
     if (feature.state === "passing") {
       throw new HarnessError({

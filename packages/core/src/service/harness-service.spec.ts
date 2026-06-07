@@ -47,6 +47,18 @@ describe("HarnessService", () => {
     expect(ctx.features.find((f) => f.id === "F01")?.state).toBe("passing");
   });
 
+  it("updateConfig patches description and hardConstraints without wiping agents", async () => {
+    await service.init(repoPath, { name: "demo", hardConstraints: [] });
+    await service.upsertAgent(repoPath, { id: "planner", role: "planner", instructions: "plan" });
+    const updated = await service.updateConfig(repoPath, {
+      description: "Nx monorepo",
+      hardConstraints: ["no network in tests"],
+    });
+    expect(updated.config.description).toBe("Nx monorepo");
+    expect(updated.config.hardConstraints).toEqual(["no network in tests"]);
+    expect(updated.agents).toHaveLength(1);
+  });
+
   it("addDecision appends and indexes", async () => {
     await service.init(repoPath, { name: "demo", hardConstraints: [] });
     await service.addDecision(repoPath, { id: "D01", date: "2026-06-04", title: "t", rationale: "r" });

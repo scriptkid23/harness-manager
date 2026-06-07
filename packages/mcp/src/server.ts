@@ -42,6 +42,17 @@ export function buildToolHandlers(service: HarnessService, tracer: Tracer): Reco
         return ok(snap);
       } catch (e) { return fail(e); }
     },
+    async harness_update_config(a) {
+      try {
+        const snap = await service.updateConfig(a.repoPath, {
+          name: a.name,
+          description: a.description,
+          hardConstraints: a.hardConstraints,
+          langfuseProjectId: a.langfuseProjectId,
+        });
+        return ok(snap.config);
+      } catch (e) { return fail(e); }
+    },
     async harness_get_context(a) {
       try {
         const snap = await service.getContext(a.repoPath);
@@ -122,14 +133,26 @@ export function buildToolHandlers(service: HarnessService, tracer: Tracer): Reco
   return result;
 }
 
-const repoArg = { repoPath: z.string().describe("Absolute path to the repo workspace") };
+const repoArg = { repoPath: z.string().describe("Logical project key, e.g. /projects/socmint (must match the registered repo path)") };
 
 /** Register handlers onto an McpServer with Zod input schemas. */
 export function registerTools(server: McpServer, handlers: Record<string, Handler>): void {
   const def = (name: string, schema: z.ZodRawShape) =>
     server.tool(name, schema, async (args) => handlers[name]!(args));
 
-  def("harness_init", { ...repoArg, name: z.string(), description: z.string().optional(), hardConstraints: z.array(z.string()).optional() });
+  def("harness_init", {
+    ...repoArg,
+    name: z.string().describe("Project display name"),
+    description: z.string().optional().describe("Short project description"),
+    hardConstraints: z.array(z.string()).optional().describe("Rules the agent must never break"),
+  });
+  def("harness_update_config", {
+    ...repoArg,
+    name: z.string().optional().describe("Project display name"),
+    description: z.string().optional().describe("Short project description"),
+    hardConstraints: z.array(z.string()).optional().describe("Replace the full hard-constraints list"),
+    langfuseProjectId: z.string().optional().describe("Langfuse project id for tracing"),
+  });
   def("harness_get_context", { ...repoArg });
   def("harness_list_features", { ...repoArg, state: z.enum(["not_started", "active", "blocked", "passing"]).optional() });
   def("harness_list_decisions", { ...repoArg });
