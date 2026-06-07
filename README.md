@@ -15,7 +15,7 @@ The source of truth lives in each repo's `.harness/` directory; SQLite is only a
 **Typical flow:** register a repo via the API or MCP → an agent edits `.harness/` via MCP → the dashboard reads it through the API.
 
 See **[Workflow guide](#workflow-guide--using-harness-mcp-on-your-repo)** for step-by-step prompts when you already have a repo.
-For a **planner / coder / reviewer / architect** setup with Superpowers and Cursor rules, see **[Multi-agent setup](#multi-agent-setup-superpowers--cursor-rules)**.
+For the **recommended minimal setup** (planner / coder / reviewer / architect + Superpowers), see **[Recommended setup](#recommended-setup-minimal)**.
 
 ---
 
@@ -262,32 +262,8 @@ Docker mounts `HARNESS_PROJECTS_DIR` as `/projects` inside the container. The pa
 
 #### Step 1 — One-time init (repo has no `.harness/` yet)
 
-**Minimal init** (single builder agent) — paste into Cursor (replace placeholders):
-
-```text
-Initialize harness for repo at <REPO_PATH>.
-
-1. harness_init:
-   name: "<PROJECT_NAME>"
-   description: "<SHORT_DESCRIPTION>"
-   hardConstraints: [
-     "No real network calls in unit tests",
-     "Any DB schema change must go through a migration"
-   ]
-
-2. harness_upsert_agent:
-   id: "builder", role: "implementer"
-   instructions: "Write code + tests. Do not change architecture without harness_add_decision."
-
-3. harness_update_feature for each planned feature (state: "not_started"):
-   - behavior: what it does
-   - verification: concrete check command (e.g. "pnpm test")
-
-4. harness_get_context — print snapshot for my confirmation.
-```
-
-**Recommended init** (planner / coder / reviewer / architect + Superpowers) — see
-**[Multi-agent setup](#multi-agent-setup-superpowers--cursor-rules)** below.
+Use the **[recommended multi-agent init](#step-1b--multi-agent-init-paste-once-per-repo)** below (planner / coder / reviewer / architect).
+For a single-agent repo, see **[docs/HARNESS_PROMPTS.md](docs/HARNESS_PROMPTS.md)** (builder-only init).
 
 `harness_init` also registers the repo in the central index. After this, `.harness/` exists in your repo and `AGENTS.md` is generated.
 
@@ -320,10 +296,11 @@ curl -X POST http://127.0.0.1:4000/repos/<repo-id>/resync
 ```text
 Start a work session on repo <REPO_PATH>.
 
-1. harness_get_context — summarize: hard constraints, active features, nextSteps, recent decisions.
+1. harness_get_context — summarize: hard constraints, agents, active features, nextSteps, recent decisions.
 2. Today I want to work on: "<TASK>".
-3. Map to a feature (or create one with behavior + verification), set state "active".
-4. Propose a short plan, then start. Update harness_update_progress as you go.
+3. Acting as: <planner|coder|reviewer|architect> — follow that agent's instructions from the snapshot.
+4. Map to a feature (or create one with behavior + verification), set state "active".
+5. Propose a short plan, then start. Update harness_update_progress as you go.
 ```
 
 #### Step 4 — During work
@@ -369,26 +346,31 @@ A **clean handoff** means no feature left in `active` state.
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Multi-agent setup (Superpowers + Cursor rules)
+### Recommended setup (minimal)
 
-Harness, Superpowers, and Cursor rules serve different layers. Use all three on a new repo:
+Three layers, each with a **single responsibility**. Do not duplicate agent instructions across layers.
 
-| Layer | Role | Where it lives |
-| ----- | ---- | -------------- |
-| **Harness MCP** | Persistent project memory (features, decisions, progress, agents) | `.harness/` in each repo |
-| **Superpowers** | Process workflows (brainstorm → plan → code → review) | Cursor plugin (skills + subagents) |
-| **Cursor rules** | Always-on orchestration (which role, when to call MCP) | `.cursor/rules/*.mdc` in each repo |
+| Layer | Responsibility | Where it lives |
+| ----- | -------------- | -------------- |
+| **Harness** (`.harness/`) | Source of truth: agents, features, decisions, progress, constraints | Git-tracked in each repo |
+| **Superpowers** | How to work: skills + subagents (brainstorm, plan, code, review) | Referenced inside `.harness/agents/*.md` |
+| **Cursor rules** | When to call harness: lifecycle trigger only | **One** `.cursor/rules/harness-lifecycle.mdc` |
 
-Cursor uses **one agent** that **acts as** planner / coder / reviewer / architect based on context — you do not need four separate Cursor agents.
+**Why one Cursor rule, not three?** Harness already stores full agent instructions in `.harness/agents/`.
+`AGENTS.md` is a thin entry file (id + role only). Copying role routing or Superpowers lists into
+`.cursor/rules/` duplicates harness and drifts out of sync. The rule's only job is to make the agent
+call `harness_get_context` every session and read instructions from the snapshot.
 
-#### Three layers (diagram)
+Cursor uses **one agent** that acts as planner / coder / reviewer / architect — you do not need four separate Cursor agents.
+
+#### Architecture (diagram)
 
 ```text
 Cursor Agent
-    ├── Cursor Rules        → orchestrate roles + harness lifecycle
-    ├── Superpowers Skills  → brainstorming, writing-plans, executing-plans, code-review
-    └── Harness MCP         → get_context, handoff, decisions, features
-            └── .harness/   → source of truth → AGENTS.md (auto-generated)
+    ├── Cursor Rule (1 file)  → "start: get_context, end: handoff"
+    ├── Superpowers Skills    → invoked per role (defined in .harness/agents/)
+    └── Harness MCP             → read/write .harness/ (source of truth)
+            └── AGENTS.md       → auto-generated thin overview
 ```
 
 #### Step 1b — Multi-agent init prompt (paste once per repo)
@@ -473,15 +455,15 @@ my-repo/
     └── decisions.md
 ```
 
-#### Step 1c — Cursor rules (create in the target repo)
+#### Step 1c — One Cursor rule (create in the target repo)
 
-Create `.cursor/rules/` in **your project repo** (not in harness-manager). Keep each rule under ~50 lines.
+Create **one file** in your project repo (not in harness-manager):
 
 **`.cursor/rules/harness-lifecycle.mdc`** (`alwaysApply: true`):
 
 ```markdown
 ---
-description: Harness MCP lifecycle for this repo
+description: Harness lifecycle — read agents from .harness via MCP
 alwaysApply: true
 ---
 
@@ -490,53 +472,19 @@ alwaysApply: true
 Repo path: <REPO_PATH>
 
 Every session:
-- START: harness_get_context
-- END: harness_handoff (clean — no active features)
+1. harness_get_context — read agents, hardConstraints, features, progress from snapshot
+2. State which harness agent role you are acting as (planner / coder / reviewer / architect)
+3. Follow that agent's instructions from the snapshot — do not duplicate them here
+4. End: harness_handoff (clean — no active features)
 
-Never set feature "passing" without evidence.
-Respect hardConstraints in config.
-Record architecture via harness_add_decision (include rejected).
+Route by user intent: plan → planner, code → coder, review → reviewer, architecture → architect.
+Never set feature "passing" without evidence. Record decisions via harness_add_decision.
 ```
 
-**`.cursor/rules/agent-roles.mdc`** (`alwaysApply: true`):
+Do **not** create separate rules for agent roles or Superpowers — that content belongs in
+`.harness/agents/*.md` and is loaded via `harness_get_context`.
 
-```markdown
----
-description: Multi-agent role routing (planner/coder/reviewer/architect)
-alwaysApply: true
----
-
-# Agent Roles
-
-Read agent definitions from .harness/agents/ and AGENTS.md.
-
-| User intent | Active role | Superpowers skills |
-|-------------|-------------|-------------------|
-| "plan", "design spec", "brainstorm" | planner | brainstorming → writing-plans |
-| "implement", "code", "fix" | coder | executing-plans, TDD, verification-before-completion |
-| "review", "check PR" | reviewer | requesting-code-review → code-reviewer subagent |
-| "architecture", "trade-off", "should we use X" | architect | brainstorming + harness_add_decision |
-
-When switching roles, state which role you are acting as.
-Planner and architect do NOT write production code.
-Coder does NOT change architecture without a recorded decision.
-```
-
-**`.cursor/rules/superpowers.mdc`** (`alwaysApply: true`):
-
-```markdown
----
-description: Always use Superpowers skills when applicable
-alwaysApply: true
----
-
-Before any task, check if a Superpowers skill applies.
-Process skills first: brainstorming, systematic-debugging, writing-plans.
-Implementation second: executing-plans, subagent-driven-development.
-Review: requesting-code-review before merge or after major features.
-```
-
-#### Role → Superpowers → Harness mapping
+#### Role → Superpowers → Harness mapping (put this in harness agents, not Cursor rules)
 
 | Harness role | Superpowers skill / subagent | Primary harness tools |
 | ------------ | ---------------------------- | --------------------- |
@@ -546,6 +494,8 @@ Review: requesting-code-review before merge or after major features.
 | **architect** | `brainstorming` | `add_decision`, `update_feature` (spec) |
 
 Architecture is not a separate Superpowers subagent — it is a Harness role backed by `harness_add_decision` in `.harness/decisions.md`.
+
+Use the table above when writing `harness_upsert_agent` instructions. The agent reads them from the `get_context` snapshot at runtime.
 
 #### Daily workflow with roles
 
@@ -583,20 +533,6 @@ Phase 5 — Handoff:
   "End session" → harness_handoff (clean state)
 ```
 
-### Agent rule (minimal — paste as a Cursor rule)
-
-If you skip the three `.mdc` files above, use this single rule instead:
-
-```text
-When working with harness MCP on repo <REPO_PATH>:
-- Start every session: harness_get_context
-- End every session: harness_handoff (clean — no active features)
-- Never set passing without evidence
-- Every feature needs a concrete verification command
-- Respect hardConstraints; stop and report if a request violates them
-- Record major decisions via harness_add_decision (include rejected)
-```
-
 ### Checklist — fully optimized harness
 
 - [ ] Every feature has a concrete `verification` command
@@ -606,9 +542,9 @@ When working with harness MCP on repo <REPO_PATH>:
 - [ ] Major decisions recorded with `rejected` alternatives
 - [ ] `AGENTS.md` reflects constraints + active features + next steps
 - [ ] Dashboard shows the repo (registered + resynced if needed)
-- [ ] Four agents defined (`planner`, `coder`, `reviewer`, `architect`) — multi-agent setup
-- [ ] `.cursor/rules/` with lifecycle + role routing + superpowers — multi-agent setup
-- [ ] `docs/superpowers/plans/` exists for planner output — multi-agent setup
+- [ ] Four agents in `.harness/agents/` with Superpowers skills in their instructions
+- [ ] **One** Cursor rule: `.cursor/rules/harness-lifecycle.mdc` (no duplicate role/superpowers rules)
+- [ ] `docs/superpowers/plans/` exists for planner output
 
 More copy-paste prompts: **[docs/HARNESS_PROMPTS.md](docs/HARNESS_PROMPTS.md)**
 
